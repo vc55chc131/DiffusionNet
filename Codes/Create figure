@@ -1,0 +1,240 @@
+import matplotlib.pyplot as plt
+import seaborn as sns
+import pandas as pd
+import numpy as np
+import networkx as nx
+from matplotlib.patches import FancyBboxPatch, Rectangle
+import matplotlib.patches as mpatches
+
+# Set style for academic papers
+plt.style.use('seaborn-v0_8-whitegrid')
+sns.set_palette("husl")
+
+# Load generated data
+df = pd.read_csv('data/translation_events.csv')
+results_df = pd.read_csv('results/model_performance.csv')
+ablation_df = pd.read_csv('results/ablation_study.csv')
+predictions_df = pd.read_csv('results/model_predictions.csv')
+lang_df = pd.read_csv('data/language_characteristics.csv')
+
+def create_figure1_network_topology():
+    """Figure 1: Translation diffusion network topology"""
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+    
+    # Left panel: Network structure
+    G = nx.DiGraph()
+    
+    # Add major languages as nodes
+    major_langs = ['en', 'zh', 'es', 'fr', 'de', 'ja', 'ru', 'pt', 'it', 'ko']
+    pos = {}
+    
+    # Position English at center
+    pos['en'] = (0, 0)
+    
+    # Position other languages in a circle
+    angles = np.linspace(0, 2*np.pi, len(major_langs)-1, endpoint=False)
+    for i, lang in enumerate([l for l in major_langs if l != 'en']):
+        pos[lang] = (1.5 * np.cos(angles[i]), 1.5 * np.sin(angles[i]))
+    
+    # Add nodes
+    for lang in major_langs:
+        G.add_node(lang)
+    
+    # Add edges based on translation frequency
+    translation_counts = df.groupby(['source_lang', 'target_lang']).size().reset_index(name='count')
+    
+    for _, row in translation_counts.iterrows():
+        if row['source_lang'] in major_langs and row['target_lang'] in major_langs:
+            if row['count'] > 10:  # Only show significant connections
+                G.add_edge(row['source_lang'], row['target_lang'], weight=row['count'])
+    
+    # Draw network
+    node_sizes = [3000 if lang == 'en' else 1500 for lang in major_langs]
+    node_colors = ['red' if lang == 'en' else 'lightblue' for lang in major_langs]
+    
+    nx.draw(G, pos, ax=ax1, node_size=node_sizes, node_color=node_colors,
+            with_labels=True, font_size=10, font_weight='bold',
+            edge_color='gray', arrows=True, arrowsize=20, alpha=0.7)
+    
+    ax1.set_title('(a) Translation Network Structure', fontsize=12, fontweight='bold')
+    ax1.axis('off')
+    
+    # Right panel: Translation delay distribution
+    ax2.hist(df['delay_days'], bins=50, alpha=0.7, color='skyblue', edgecolor='black')
+    ax2.set_xlabel('Translation Delay (days)', fontsize=11)
+    ax2.set_ylabel('Frequency', fontsize=11)
+    ax2.set_title('(b) Translation Delay Distribution', fontsize=12, fontweight='bold')
+    ax2.set_xlim(0, 100)
+    
+    plt.tight_layout()
+    plt.savefig('figures/figure1_network_topology.png', dpi=300, bbox_inches='tight')
+    plt.close()
+
+def create_figure2_model_architecture():
+    """Figure 2: DiffusionNet model architecture"""
+    fig, ax = plt.subplots(1, 1, figsize=(10, 6))
+    
+    # Define components
+    components = [
+        {'name': 'Language\nFeatures', 'pos': (1, 4), 'size': (1.5, 1), 'color': 'lightblue'},
+        {'name': 'Translation\nGraph', 'pos': (1, 2.5), 'size': (1.5, 1), 'color': 'lightgreen'},
+        {'name': 'Temporal\nWeights', 'pos': (1, 1), 'size': (1.5, 1), 'color': 'lightyellow'},
+        {'name': 'Graph Neural\nNetwork', 'pos': (4, 2.5), 'size': (2, 1.5), 'color': 'lightcoral'},
+        {'name': 'Node\nEmbeddings', 'pos': (7, 3.5), 'size': (1.5, 1), 'color': 'lightpink'},
+        {'name': 'Macro\nFeatures', 'pos': (7, 1.5), 'size': (1.5, 1), 'color': 'lightgray'},
+        {'name': 'Prediction\nHead', 'pos': (10, 2.5), 'size': (1.5, 1.5), 'color': 'orange'},
+        {'name': 'Translation\nDelay', 'pos': (13, 2.5), 'size': (1.5, 1), 'color': 'gold'}
+    ]
+    
+    # Draw components
+    for comp in components:
+        rect = FancyBboxPatch(
+            comp['pos'], comp['size'][0], comp['size'][1],
+            boxstyle="round,pad=0.1", facecolor=comp['color'],
+            edgecolor='black', linewidth=1.5
+        )
+        ax.add_patch(rect)
+        
+        # Add text
+        ax.text(comp['pos'][0] + comp['size'][0]/2, comp['pos'][1] + comp['size'][1]/2,
+                comp['name'], ha='center', va='center', fontsize=10, fontweight='bold')
+    
+    # Draw arrows
+    arrows = [
+        ((2.5, 4.5), (4, 3.5)),  # Language features to GNN
+        ((2.5, 3), (4, 3)),      # Translation graph to GNN
+        ((2.5, 1.5), (4, 2)),    # Temporal weights to GNN
+        ((6, 2.5), (7, 4)),      # GNN to embeddings
+        ((8.5, 4), (10, 3.5)),   # Embeddings to prediction
+        ((8.5, 2), (10, 2.5)),   # Macro features to prediction
+        ((11.5, 2.5), (13, 2.5)) # Prediction to output
+    ]
+    
+    for start, end in arrows:
+        ax.annotate('', xy=end, xytext=start,
+                   arrowprops=dict(arrowstyle='->', lw=2, color='black'))
+    
+    ax.set_xlim(0, 15)
+    ax.set_ylim(0, 6)
+    ax.set_title('DiffusionNet Architecture', fontsize=14, fontweight='bold')
+    ax.axis('off')
+    
+    plt.tight_layout()
+    plt.savefig('figures/figure2_model_architecture.png', dpi=300, bbox_inches='tight')
+    plt.close()
+
+def create_figure3_prediction_results():
+    """Figure 3: Prediction results comparison"""
+    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(12, 10))
+    
+    # Subplot 1: True vs Predicted (DiffusionNet)
+    sample_indices = np.random.choice(len(predictions_df), 1000, replace=False)
+    true_vals = predictions_df.iloc[sample_indices]['true']
+    pred_vals = predictions_df.iloc[sample_indices]['diffusionnet']
+    
+    ax1.scatter(true_vals, pred_vals, alpha=0.6, s=20)
+    max_val = max(true_vals.max(), pred_vals.max())
+    ax1.plot([0, max_val], [0, max_val], 'r--', lw=2)
+    ax1.set_xlabel('True Delay (days)', fontsize=11)
+    ax1.set_ylabel('Predicted Delay (days)', fontsize=11)
+    ax1.set_title('(a) DiffusionNet Predictions', fontsize=12, fontweight='bold')
+    
+    # Subplot 2: Model comparison
+    models = results_df['Model']
+    mae_values = results_df['MAE (days)']
+    
+    bars = ax2.bar(range(len(models)), mae_values, color=['lightcoral', 'lightblue', 'lightgreen', 'gold'])
+    ax2.set_xlabel('Models', fontsize=11)
+    ax2.set_ylabel('MAE (days)', fontsize=11)
+    ax2.set_title('(b) Model Performance Comparison', fontsize=12, fontweight='bold')
+    ax2.set_xticks(range(len(models)))
+    ax2.set_xticklabels([m.replace(' ', '\\n') for m in models], fontsize=9)
+    
+    # Add value labels on bars
+    for bar, val in zip(bars, mae_values):
+        ax2.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.1,
+                f'{val}', ha='center', va='bottom', fontsize=10)
+    
+    # Subplot 3: Ablation study
+    ablation_configs = ablation_df['Configuration']
+    ablation_mae = ablation_df['MAE (days)']
+    
+    bars = ax3.bar(range(len(ablation_configs)), ablation_mae, 
+                   color=['gold', 'lightcoral', 'lightblue', 'lightgray'])
+    ax3.set_xlabel('Configuration', fontsize=11)
+    ax3.set_ylabel('MAE (days)', fontsize=11)
+    ax3.set_title('(c) Ablation Study Results', fontsize=12, fontweight='bold')
+    ax3.set_xticks(range(len(ablation_configs)))
+    ax3.set_xticklabels([c.replace(' ', '\\n').replace('w/o', 'w/o\\n') for c in ablation_configs], 
+                       fontsize=8, rotation=45)
+    
+    # Subplot 4: Language characteristics vs delay
+    lang_delays = df.groupby('target_lang')['delay_days'].mean()
+    
+    # Get common languages and their data
+    common_langs = []
+    x_vals = []
+    y_vals = []
+    
+    for lang in lang_delays.index:
+        if lang in lang_df.index:
+            common_langs.append(lang)
+            x_vals.append(lang_df.loc[lang, 'gdp_per_capita'])
+            y_vals.append(lang_delays[lang])
+    
+    if len(x_vals) > 1:  # Only plot if we have data
+        ax4.scatter(x_vals, y_vals, alpha=0.7, s=50)
+        ax4.set_xlabel('GDP per Capita (USD)', fontsize=11)
+        ax4.set_ylabel('Average Translation Delay (days)', fontsize=11)
+        ax4.set_title('(d) Economic Factor vs Delay', fontsize=12, fontweight='bold')
+        ax4.set_xscale('log')
+        
+        # Add trend line
+        if len(x_vals) > 2:
+            z = np.polyfit(np.log(x_vals), y_vals, 1)
+            p = np.poly1d(z)
+            x_trend = np.logspace(np.log10(min(x_vals)), np.log10(max(x_vals)), 100)
+            ax4.plot(x_trend, p(np.log(x_trend)), "r--", alpha=0.8)
+    else:
+        # Fallback plot
+        ax4.text(0.5, 0.5, 'Insufficient data for correlation plot', 
+                ha='center', va='center', transform=ax4.transAxes)
+        ax4.set_title('(d) Economic Factor vs Delay', fontsize=12, fontweight='bold')
+    
+    plt.tight_layout()
+    plt.savefig('figures/figure3_prediction_results.png', dpi=300, bbox_inches='tight')
+    plt.close()
+
+def create_tables():
+    """Create performance and ablation tables"""
+    # Performance table
+    print("Table 1: Model Performance Comparison")
+    print("=" * 50)
+    print(results_df.to_string(index=False))
+    print()
+    
+    # Ablation table
+    print("Table 2: Ablation Study Results")
+    print("=" * 50)
+    print(ablation_df.to_string(index=False))
+    print()
+    
+    # Save as CSV for easy formatting
+    results_df.to_csv('results/table1_performance.csv', index=False)
+    ablation_df.to_csv('results/table2_ablation.csv', index=False)
+
+if __name__ == "__main__":
+    print("Creating Figure 1: Network topology...")
+    create_figure1_network_topology()
+    
+    print("Creating Figure 2: Model architecture...")
+    create_figure2_model_architecture()
+    
+    print("Creating Figure 3: Prediction results...")
+    create_figure3_prediction_results()
+    
+    print("Creating tables...")
+    create_tables()
+    
+    print("All figures and tables created successfully!")
+
